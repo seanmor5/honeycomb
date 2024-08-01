@@ -1,0 +1,19 @@
+<%= case hd(messages) do %>
+  <% %{role: "system"} -> %>
+    <% raise "System role not supported" %>
+  <% _ -> %>
+<% end %>
+<%=
+  messages
+  |> Enum.with_index(fn %{role: role, content: content}, i ->
+    if (role == "user") != (rem(i, 2) == 0) do
+      raise "Conversation roles must alternate between user/assistant/user/assistant..."
+    end
+
+    case role do
+      "user" -> "<start_of_turn>user\n#{String.trim(content)}<end_of_turn>"
+      "assistant" -> "<start_of_turn>model\n#{String.trim(content)}<end_of_turn>"
+    end
+  end)
+  |> Enum.join("\n")
+%>

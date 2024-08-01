@@ -1,0 +1,6 @@
+<%= Enum.map_join(messages, "\n", fn
+  %{role: "system", content: sys} -> "<|system|>\n#{sys}<|end|>"
+  %{role: "user", content: user} -> "<|user|>\n#{user}<|end|>"
+  %{role: "assistant", content: assis} -> "<|assistant|>\n#{assis}<|end|>"
+end) %>
+<|assistant|>
