@@ -6,6 +6,8 @@ defmodule Mix.Tasks.Honeycomb.Serve do
   @impl true
   def run(args) do
     Application.put_env(:honeycomb, :start_serving, true)
+    Application.put_env(:honeycomb, :start_router, true)
+
     :ok = parse_serving_args(args, [])
     Mix.Tasks.Run.run(["--no-halt"])
   end
