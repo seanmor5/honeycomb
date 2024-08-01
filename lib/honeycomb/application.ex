@@ -2,9 +2,15 @@ defmodule Honeycomb.Application do
   use Application
 
   def start(_type, _args) do
-    children = [
-      {Bandit, plug: Honeycomb.Router}
-    ]
+    children = []
+
+    children =
+      if Application.fetch_env!(:honeycomb, :start_router) do
+        router = {Bandit, plug: Honeycomb.Router}
+        [router | children]
+      else
+        children
+      end
 
     children =
       if Application.fetch_env!(:honeycomb, :start_serving) do
