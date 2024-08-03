@@ -334,10 +334,7 @@ defmodule Honeycomb.Controller.OpenAI do
         json!(conn, 200, Map.from_struct(response))
 
       {:error, %NimbleOptions.ValidationError{message: msg}} ->
-        json!(conn, 400, %{code: msg})
-
-      _ ->
-        json!(conn, 400, %{code: "Bad parameters!"})
+        json!(conn, 400, %{code: "bad_request", message: msg})
     end
   end
 
