@@ -7,7 +7,7 @@ defmodule Honeycomb.Router do
 
   plug Plug.Parsers,
     parsers: [:json],
-    json_decoder: Jason
+    json_decoder: {Jason, :decode!, [[keys: :atoms]]}
 
   plug :dispatch
 

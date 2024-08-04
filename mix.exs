@@ -25,7 +25,8 @@ defmodule Honeycomb.MixProject do
       {:bandit, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:bumblebee, github: "elixir-nx/bumblebee"},
-      {:exla, ">= 0.0.0"}
+      {:exla, ">= 0.0.0"},
+      {:nimble_options, "~> 1.0"}
     ]
   end
 end
