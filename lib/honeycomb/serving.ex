@@ -5,9 +5,12 @@ defmodule Honeycomb.Serving do
 
   alias Honeycomb.Templates
 
+  @default_sequence_length 512
+
   def serving() do
     model = env(:model)
     template = env(:chat_template)
+    sequence_length = env(:sequence_length) || @default_sequence_length
 
     Logger.info("Serving: Using model repo #{model}")
     Logger.info("Serving: Using chat template #{template}")
@@ -19,7 +22,7 @@ defmodule Honeycomb.Serving do
     {:ok, generation_config} = Bumblebee.load_generation_config(repo)
 
     Bumblebee.Text.generation(model_info, tokenizer, generation_config,
-      compile: [batch_size: 1, sequence_length: 32],
+      compile: [batch_size: 1, sequence_length: sequence_length],
       defn_options: [compiler: EXLA],
       stream: true,
       stream_done: true

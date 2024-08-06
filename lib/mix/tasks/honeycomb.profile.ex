@@ -1,17 +1,30 @@
-defmodule Mix.Tasks.Honeycomb.Serve do
+defmodule Mix.Tasks.Honeycomb.Profile do
   use Mix.Task
 
-  @shortdoc "Starts the Honeycomb server"
+  @shortdoc "Profiles the given Honeycomb configuration"
+
+  @prompt "Complete the following: The quick brown"
 
   @impl true
   def run(args) do
     Application.put_env(:honeycomb, :start_serving, true)
-    Application.put_env(:honeycomb, :start_router, true)
-
     :ok = parse_serving_args(args, [])
-    Mix.Tasks.Run.run(["--no-halt"])
+
+    Mix.Task.run("app.start")
+
+    messages = [%{role: "user", content: @prompt}]
+    opts = [messages: messages, stream: false]
+
+    Mix.Tasks.Profile.Fprof.profile(
+      fn ->
+        Honeycomb.chat_completion(opts)
+      end,
+      details: true,
+      callers: true
+    )
   end
 
+  # TODO: Do not duplicate this
   defp parse_serving_args([], env), do: Application.put_env(:honeycomb, Honeycomb.Serving, env)
 
   defp parse_serving_args(["--model=" <> model_id | args], env) do
@@ -41,16 +54,6 @@ defmodule Mix.Tasks.Honeycomb.Serve do
 
   defp parse_serving_args(["--hf-auth-token", token | args], env) do
     env = Keyword.put(env, :auth_token, token)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--max-sequence-length=" <> seqlen | args], env) do
-    env = Keyword.put(env, :sequence_length, String.to_integer(seqlen))
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--max-sequence-length", seqlen | args], env) do
-    env = Keyword.put(env, :sequence_length, String.to_integer(seqlen))
     parse_serving_args(args, env)
   end
 

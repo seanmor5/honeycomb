@@ -123,6 +123,16 @@ defmodule Mix.Tasks.Honeycomb.Benchmark do
     parse_serving_args(args, env)
   end
 
+  defp parse_serving_args(["--max-sequence-length=" <> seqlen | args], env) do
+    env = Keyword.put(env, :sequence_length, String.to_integer(seqlen))
+    parse_serving_args(args, env)
+  end
+
+  defp parse_serving_args(["--max-sequence-length", seqlen | args], env) do
+    env = Keyword.put(env, :sequence_length, String.to_integer(seqlen))
+    parse_serving_args(args, env)
+  end
+
   defp parse_serving_args([arg | _], _env) do
     raise "unknown serving argument #{arg}"
   end
