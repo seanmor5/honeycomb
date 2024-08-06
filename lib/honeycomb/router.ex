@@ -14,9 +14,40 @@ defmodule Honeycomb.Router do
   post "/v1/chat/completions" do
     opts = Enum.into(conn.body_params, [])
 
+    stream? = Keyword.get(opts, :stream, false)
+
+    if stream? do
+      do_stream_http_sse(conn, opts)
+    else
+      do_http_response(conn, opts)
+    end
+  end
+
+  defp do_http_response(conn, opts) do
     case Honeycomb.chat_completion(opts) do
       {:ok, response} -> json!(conn, 200, response)
       {:error, msg} -> json!(conn, 400, %{code: "bad_request", message: msg})
+    end
+  end
+
+  defp do_stream_http_sse(conn, opts) do
+    case Honeycomb.chat_completion(opts) do
+      {:error, msg} ->
+        json!(conn, 400, %{code: "bad_request", message: msg})
+
+      stream ->
+        # TODO: This is not really SSE
+        Enum.reduce_while(stream, send_chunked(conn, 200), fn chunk, conn ->
+          data = Jason.encode!(chunk)
+
+          case chunk(conn, data) do
+            {:ok, conn} ->
+              {:cont, conn}
+
+            _ ->
+              {:halt, conn}
+          end
+        end)
     end
   end
 

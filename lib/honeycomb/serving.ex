@@ -1,7 +1,6 @@
 defmodule Honeycomb.Serving do
-  @moduledoc """
-  LLM Serving Module.
-  """
+  @moduledoc false
+
   require Logger
 
   alias Honeycomb.Templates
@@ -21,7 +20,9 @@ defmodule Honeycomb.Serving do
 
     Bumblebee.Text.generation(model_info, tokenizer, generation_config,
       compile: [batch_size: 1, sequence_length: 32],
-      defn_options: [compiler: EXLA]
+      defn_options: [compiler: EXLA],
+      stream: true,
+      stream_done: true
     )
   end
 

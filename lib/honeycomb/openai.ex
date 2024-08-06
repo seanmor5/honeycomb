@@ -3,6 +3,30 @@ defmodule Honeycomb.OpenAI do
 
   alias Honeycomb.Serving
 
+  defmodule Chunk do
+    @moduledoc false
+    defstruct [:choices, :created, :id, :model, :object]
+
+    def new(model, text, id \\ id(), created \\ System.os_time(:second)) do
+      struct(__MODULE__,
+        choices: choices(text),
+        created: created,
+        id: id,
+        model: model,
+        object: "chat.completion.chunk"
+      )
+    end
+
+    defp id() do
+      encoded = Base.url_encode64(:crypto.strong_rand_bytes(21), padding: false)
+      "honeycomb-#{String.slice(encoded, 0..21)}"
+    end
+
+    defp choices(generation) do
+      [%{delta: %{content: generation}, finish_reason: nil, index: 0}]
+    end
+  end
+
   defmodule Response do
     @moduledoc false
     defstruct [:choices, :created, :id, :model, :object, :usage]
@@ -149,6 +173,7 @@ defmodule Honeycomb.OpenAI do
             map: @assistant_message_keys,
             map: @function_message_schema
           ]}},
+      required: true,
       doc: "A list of messages comprising the conversation so far. "
     ],
     model: [type: :string, doc: "ID of the model to use"],
@@ -324,18 +349,46 @@ defmodule Honeycomb.OpenAI do
     case NimbleOptions.validate(opts, @body_params_validator) do
       {:ok, opts} ->
         messages = Keyword.fetch!(opts, :messages)
+        stream? = Keyword.fetch!(opts, :stream)
 
         model = Serving.model()
-        %{results: [generation]} = Serving.generate(messages)
+        stream = Serving.generate(messages)
 
-        model
-        |> Response.new(generation)
-        |> Map.from_struct()
-        |> then(&{:ok, &1})
+        if stream? do
+          do_stream_chunks(model, stream)
+        else
+          do_consume_stream(model, stream)
+        end
 
       {:error, %NimbleOptions.ValidationError{message: msg}} ->
         {:error, msg}
     end
+  end
+
+  defp do_stream_chunks(model, stream) do
+    %{id: id, created: created} = Chunk.new(model, "")
+
+    Stream.map(stream, fn text ->
+      model
+      |> Chunk.new(text, id, created)
+      |> Map.from_struct()
+    end)
+    |> Stream.drop(-1)
+  end
+
+  defp do_consume_stream(model, stream) do
+    {text, summary} =
+      Enum.reduce(stream, {"", nil}, fn res, {acc, _last} ->
+        case res do
+          text when is_binary(res) -> {acc <> text, nil}
+          {:done, summary} -> {acc, summary}
+        end
+      end)
+
+    summary
+    |> Map.put(:text, text)
+    |> then(&Response.new(model, &1))
+    |> then(&{:ok, &1})
   end
 
   defp assert_serving_started! do
