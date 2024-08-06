@@ -1,4 +1,6 @@
 defmodule Honeycomb.Router do
+  @moduledoc false
+
   use Plug.Router
 
   plug :match
