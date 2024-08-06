@@ -36,19 +36,25 @@ defmodule Honeycomb.Router do
         json!(conn, 400, %{code: "bad_request", message: msg})
 
       stream ->
-        # TODO: This is not really SSE
-        Enum.reduce_while(stream, send_chunked(conn, 200), fn chunk, conn ->
-          data = Jason.encode!(chunk)
-
-          case chunk(conn, data) do
-            {:ok, conn} ->
-              {:cont, conn}
-
-            _ ->
-              {:halt, conn}
-          end
-        end)
+        conn
+        |> put_resp_content_type("text/event-stream")
+        |> send_chunked(200)
+        |> stream_chunks(stream)
     end
+  end
+
+  defp stream_chunks(conn, stream) do
+    Enum.reduce_while(stream, conn, fn chunk, conn ->
+      data = Jason.encode!(chunk)
+
+      case chunk(conn, "data: #{data}\n\n") do
+        {:ok, conn} ->
+          {:cont, conn}
+
+        _ ->
+          {:halt, conn}
+      end
+    end)
   end
 
   defp json!(conn, status, data) do

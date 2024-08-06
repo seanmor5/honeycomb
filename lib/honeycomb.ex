@@ -1,6 +1,7 @@
 defmodule Honeycomb do
   @moduledoc """
-  Fast LLM inference built on Elixir and Bumblebee.
+  Fast LLM inference built on Elixir, [Bumblebee](https://github.com/elixir-nx/bumblebee),
+  and [EXLA](https://github.com/elixir-nx/nx/tree/main/exla).
 
   ## Usage
 
@@ -19,11 +20,18 @@ defmodule Honeycomb do
   The following arguments are required:
 
     * `--model` - HuggingFace model repo to use
+
     * `--chat-template` - Chat template to use
 
   The following arguments are optional:
 
-    * `--auth-token` - HuggingFace auth token for accessing private or gated repos.
+    * `--max-sequence-length` - Text generation max sequence length. Total sequence
+      length accounts for both input and output tokens.
+
+    * `--hf-auth-token` - HuggingFace auth token for accessing private or gated repos.
+
+  The Honeycomb server is compatible with the OpenAI API, so you can use it as a
+  drop-in replacement by changing the `api_url` in the OpenAI client.
 
   ### As a dependency
 
@@ -36,8 +44,8 @@ defmodule Honeycomb do
   Next, you'll need to configure the serving options:
 
       config :honeycomb, Honeycomb.Serving,
-        model: "google/gemma-2-2b-it",
-        chat_template: "gemma2",
+        model: "microsoft/Phi-3-mini-4k-instruct",
+        chat_template: "phi3",
         auth_token: System.fetch_env!("HF_TOKEN")
 
   Then you can call Honeycomb directly:
@@ -48,6 +56,15 @@ defmodule Honeycomb do
 
   @doc """
   Generate a chat completion response.
+
+  Note that currently many OpenAI options are not implemented. These options
+  will still be validated, but ultimately ignored.
+
+  ## Options
+
+    * `:messages` - chat history as system/user/assistant prompts. Required
+
+    * `:stream` - whether or not to stream the output. Defaults to `false`
   """
   def chat_completion(opts \\ []) do
     OpenAI.chat_completion(opts)
