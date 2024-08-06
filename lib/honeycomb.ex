@@ -44,30 +44,12 @@ defmodule Honeycomb do
 
       Honeycomb.chat_completion(...)
   """
-  alias Honeycomb.Controller.OpenAI
-  alias Honeycomb.Serving
+  alias Honeycomb.OpenAI
 
   @doc """
   Generate a chat completion response.
   """
   def chat_completion(opts \\ []) do
-    assert_serving_started!()
-
-    messages = opts[:messages] || raise "no messages found"
-
-    # TODO: Decouple this somehow?
-    model = Serving.model()
-    %{results: [generation]} = Serving.generate(messages)
-
-    model
-    |> OpenAI.Response.new(generation)
-    |> Map.from_struct()
-    |> then(&{:ok, &1})
-  end
-
-  defp assert_serving_started! do
-    with nil <- Process.whereis(Honeycomb.Serving) do
-      raise "could not find started Honeycomb serving process"
-    end
+    OpenAI.chat_completion(opts)
   end
 end

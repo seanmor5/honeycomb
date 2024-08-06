@@ -1,9 +1,10 @@
-defmodule Honeycomb.Controller.OpenAI do
+defmodule Honeycomb.OpenAI do
   @moduledoc false
 
   alias Honeycomb.Serving
 
   defmodule Response do
+    @moduledoc false
     defstruct [:choices, :created, :id, :model, :object, :usage]
 
     def new(model, %{text: text, token_summary: usage}) do
@@ -42,8 +43,6 @@ defmodule Honeycomb.Controller.OpenAI do
       }
     end
   end
-
-  import Plug.Conn
 
   @system_message_keys [
     content: [type: :string, required: true, doc: "The contents of the system message."],
@@ -152,7 +151,7 @@ defmodule Honeycomb.Controller.OpenAI do
           ]}},
       doc: "A list of messages comprising the conversation so far. "
     ],
-    model: [type: :string, required: true, doc: "ID of the model to use"],
+    model: [type: :string, doc: "ID of the model to use"],
     frequency_penalty: [
       type: {:or, [nil, @number_schema]},
       default: 0,
@@ -319,29 +318,29 @@ defmodule Honeycomb.Controller.OpenAI do
   ]
 
   @body_params_validator NimbleOptions.new!(@body_params_schema)
-  def chat_completion(conn) do
-    body_param_options = Enum.into(conn.body_params, [])
+  def chat_completion(opts \\ []) when is_list(opts) do
+    assert_serving_started!()
 
-    case NimbleOptions.validate(body_param_options, @body_params_validator) do
-      {:ok, options} ->
-        messages = Keyword.fetch!(options, :messages)
+    case NimbleOptions.validate(opts, @body_params_validator) do
+      {:ok, opts} ->
+        messages = Keyword.fetch!(opts, :messages)
 
-        %{results: [generation]} =
-          messages
-          |> Serving.generate()
+        model = Serving.model()
+        %{results: [generation]} = Serving.generate(messages)
 
-        response = Response.new(Serving.model(), generation)
-        json!(conn, 200, Map.from_struct(response))
+        model
+        |> Response.new(generation)
+        |> Map.from_struct()
+        |> then(&{:ok, &1})
 
       {:error, %NimbleOptions.ValidationError{message: msg}} ->
-        json!(conn, 400, %{code: "bad_request", message: msg})
+        {:error, msg}
     end
   end
 
-  defp json!(conn, status, data) do
-    conn
-    |> put_resp_content_type("application/json")
-    |> resp(status, Jason.encode!(data))
-    |> send_resp()
+  defp assert_serving_started! do
+    with nil <- Process.whereis(Honeycomb.Serving) do
+      raise "could not find started Honeycomb serving process"
+    end
   end
 end

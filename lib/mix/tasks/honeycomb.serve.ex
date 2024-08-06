@@ -43,4 +43,8 @@ defmodule Mix.Tasks.Honeycomb.Serve do
     env = Keyword.put(env, :auth_token, token)
     parse_serving_args(args, env)
   end
+
+  defp parse_serving_args([arg | _], _env) do
+    raise "unknown serving argument #{arg}"
+  end
 end
