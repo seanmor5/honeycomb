@@ -1,4 +1,16 @@
 defmodule Mix.Tasks.Honeycomb.Profile do
+  @moduledoc """
+  Profiles the given Honeycomb configuration using fprof.
+
+  ## Usage
+
+      mix honeycomb.profile --model=microsoft/Phi-3-mini-4k-instruct --chat-template=phi3
+
+  ## Options
+
+  #{Honeycomb.CLI.usage()}
+  """
+
   use Mix.Task
 
   @shortdoc "Profiles the given Honeycomb configuration"
@@ -7,10 +19,32 @@ defmodule Mix.Tasks.Honeycomb.Profile do
 
   @impl true
   def run(args) do
+    case Honeycomb.CLI.parse_args(args) do
+      {:ok, config} ->
+        run_profile(config)
+
+      {:help, usage} ->
+        Mix.shell().info(usage)
+
+      {:error, reason} ->
+        Mix.shell().error("Error: #{reason}")
+        Mix.shell().info(Honeycomb.CLI.usage())
+        exit({:shutdown, 1})
+    end
+  end
+
+  defp run_profile(config) do
+    # Apply configuration
+    :ok = Honeycomb.CLI.apply_config(config)
+
     Application.put_env(:honeycomb, :start_serving, true)
-    :ok = parse_serving_args(args, [])
 
     Mix.Task.run("app.start")
+
+    Mix.shell().info("Profiling chat completion...")
+    Mix.shell().info("Model: #{config.model}")
+    Mix.shell().info("Prompt: #{@prompt}")
+    Mix.shell().info("")
 
     messages = [%{role: "user", content: @prompt}]
     opts = [messages: messages, stream: false]
@@ -22,42 +56,5 @@ defmodule Mix.Tasks.Honeycomb.Profile do
       details: true,
       callers: true
     )
-  end
-
-  # TODO: Do not duplicate this
-  defp parse_serving_args([], env), do: Application.put_env(:honeycomb, Honeycomb.Serving, env)
-
-  defp parse_serving_args(["--model=" <> model_id | args], env) do
-    env = Keyword.put(env, :model, model_id)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--model", model_id | args], env) do
-    env = Keyword.put(env, :model, model_id)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--chat-template=" <> template | args], env) do
-    env = Keyword.put(env, :chat_template, template)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--chat-template", template | args], env) do
-    env = Keyword.put(env, :chat_template, template)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--hf-auth-token=" <> token | args], env) do
-    env = Keyword.put(env, :auth_token, token)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--hf-auth-token", token | args], env) do
-    env = Keyword.put(env, :auth_token, token)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args([arg | _], _env) do
-    raise "unknown serving argument #{arg}"
   end
 end

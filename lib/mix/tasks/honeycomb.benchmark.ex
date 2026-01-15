@@ -1,15 +1,44 @@
 defmodule Mix.Tasks.Honeycomb.Benchmark do
+  @moduledoc """
+  Benchmarks the given Honeycomb configuration.
+
+  ## Usage
+
+      mix honeycomb.benchmark --model=microsoft/Phi-3-mini-4k-instruct --chat-template=phi3
+
+  ## Options
+
+  #{Honeycomb.CLI.usage()}
+  """
+
   use Mix.Task
 
   @shortdoc "Benchmarks the given Honeycomb configuration"
-  @iterations 5
 
+  @iterations 5
   @prompt "Complete the following: The quick brown"
 
   @impl true
   def run(args) do
+    case Honeycomb.CLI.parse_args(args) do
+      {:ok, config} ->
+        run_benchmark(config)
+
+      {:help, usage} ->
+        Mix.shell().info(usage)
+
+      {:error, reason} ->
+        Mix.shell().error("Error: #{reason}")
+        Mix.shell().info(Honeycomb.CLI.usage())
+        exit({:shutdown, 1})
+    end
+  end
+
+  defp run_benchmark(config) do
+    # Apply configuration
+    :ok = Honeycomb.CLI.apply_config(config)
+
     Application.put_env(:honeycomb, :start_serving, true)
-    :ok = parse_serving_args(args, [])
 
     start_time = :erlang.monotonic_time()
     Mix.Task.run("app.start")
@@ -17,16 +46,18 @@ defmodule Mix.Tasks.Honeycomb.Benchmark do
 
     startup_time_ms = :erlang.convert_time_unit(end_time - start_time, :native, :millisecond)
 
-    IO.puts("App started. Total startup time: #{startup_time_ms}")
-    IO.puts("Benchmarking chat completions for #{@iterations} iterations")
-    IO.puts("Completion prompt: #{@prompt}")
+    Mix.shell().info("App started. Total startup time: #{startup_time_ms}ms")
+    Mix.shell().info("Benchmarking chat completions for #{@iterations} iterations")
+    Mix.shell().info("Model: #{config.model}")
+    Mix.shell().info("Completion prompt: #{@prompt}")
+    Mix.shell().info("")
 
     per_iteration_results =
       Enum.map(0..@iterations, fn i ->
         res = benchmark()
 
         unless i == 0 do
-          IO.puts("Iteration #{i} Results")
+          Mix.shell().info("Iteration #{i} Results")
           inspect_results(res)
         end
 
@@ -43,8 +74,18 @@ defmodule Mix.Tasks.Honeycomb.Benchmark do
       end)
       |> Map.new(fn {k, v} -> {k, v / @iterations} end)
 
-    IO.puts("\nAggregate Results")
+    Mix.shell().info("")
+    Mix.shell().info("Aggregate Results")
     inspect_results(average_results)
+
+    # Output metrics summary
+    if Process.whereis(Honeycomb.Metrics) do
+      metrics = Honeycomb.Metrics.get_all()
+      Mix.shell().info("")
+      Mix.shell().info("Metrics Summary")
+      Mix.shell().info("  Total tokens generated: #{metrics.tokens_generated}")
+      Mix.shell().info("  Avg throughput: #{Float.round(metrics.throughput_tps, 2)} tok/s")
+    end
   end
 
   defp benchmark() do
@@ -68,7 +109,7 @@ defmodule Mix.Tasks.Honeycomb.Benchmark do
 
     duration = :erlang.convert_time_unit(end_time - start_time, :native, :nanosecond)
 
-    average_time_per_token_ms = Enum.sum(rest) / length(rest) / 1_000_000
+    average_time_per_token_ms = Enum.sum(rest) / max(length(rest), 1) / 1_000_000
     time_to_first_token_ms = time_to_first_token / 1_000_000
     duration_ms = duration / 1_000_000
 
@@ -81,59 +122,15 @@ defmodule Mix.Tasks.Honeycomb.Benchmark do
   end
 
   defp inspect_results(res) do
-    IO.write("time_per_token=#{float_format(res.average_time_per_token)}ms\t")
-    IO.write("time_to_first_token=#{float_format(res.time_to_first_token)}ms\t")
-    IO.write("duration=#{float_format(res.duration)}ms\n")
+    Mix.shell().info(
+      "  time_per_token=#{float_format(res.average_time_per_token)}ms  " <>
+      "time_to_first_token=#{float_format(res.time_to_first_token)}ms  " <>
+      "duration=#{float_format(res.duration)}ms  " <>
+      "tokens=#{res.total_tokens}"
+    )
   end
 
   defp float_format(float) do
-    :io_lib.format(~c"~.2f", [float])
-  end
-
-  # TODO: Do not duplicate this
-  defp parse_serving_args([], env), do: Application.put_env(:honeycomb, Honeycomb.Serving, env)
-
-  defp parse_serving_args(["--model=" <> model_id | args], env) do
-    env = Keyword.put(env, :model, model_id)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--model", model_id | args], env) do
-    env = Keyword.put(env, :model, model_id)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--chat-template=" <> template | args], env) do
-    env = Keyword.put(env, :chat_template, template)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--chat-template", template | args], env) do
-    env = Keyword.put(env, :chat_template, template)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--hf-auth-token=" <> token | args], env) do
-    env = Keyword.put(env, :auth_token, token)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--hf-auth-token", token | args], env) do
-    env = Keyword.put(env, :auth_token, token)
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--max-sequence-length=" <> seqlen | args], env) do
-    env = Keyword.put(env, :sequence_length, String.to_integer(seqlen))
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args(["--max-sequence-length", seqlen | args], env) do
-    env = Keyword.put(env, :sequence_length, String.to_integer(seqlen))
-    parse_serving_args(args, env)
-  end
-
-  defp parse_serving_args([arg | _], _env) do
-    raise "unknown serving argument #{arg}"
+    :io_lib.format(~c"~.2f", [float]) |> to_string()
   end
 end
